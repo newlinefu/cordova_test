@@ -1,21 +1,24 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
+
+//Объект хранения состояния загрузки на текущий момент
+const state = {
+
+	//Идет ли загрузка данных в данный момент времени
+	isLoading: false,
+
+	//Поле для фиксирования получения/неполучения данных по какой-либо причине
+	contentAvailable: true,
+	
+	//Должны ли элементы получаться с сервера на рандоме
+	isRandom: false,
+
+	//Исполнители, число подписчиков которых не превышает данное поле
+	maxCountOFSubs: 100000
+}
+
+//Функция контроля над массивом данных
+let getNextContent;
+
+
 var app = {
     // Application Constructor
     initialize: function() {
@@ -37,121 +40,184 @@ var app = {
 };
 
 app.initialize();
-//app.onDeviceReady();
 
-//main();
 function main() {
-	let contentJSON = 
-	`[
-		{
-			"name": "Three Days Grace",
-			"photo":"img/three-days-grace.1_f.jpg",
-			"subs":3500,
-			"description":"Three Days Grace — канадская рок-группа, исполняющая альтернативный метал и постгранж. Была сформирована под названием Groundswell в Норвуде, Онтарио, Канада в 1992 году."
-		},
-		{
-			"name":"Thousand Foot Krutch",
-			"photo":"img/31.jpg",
-			"subs":6900,
-			"description":"Thousand Foot Krutch (сокращенно TFK) — канадская рок-группа. По словам фронтмена группы Тревора МакНивена, название означает тот момент в нашей жизни, когда мы понимаем, что нельзя полагаться только на свои силы."
-		},
-		{
-			"name":"Pyrokinesis",
-			"photo":"img/m1000x1000.jpg",
-			"subs":3500,
-			"description":"Pyrokinesis – он же Андрей Пирокинезис. Его музыка - это не просто выдуманный образ, а реально прожитые и прочувствованные автором моменты. Он умеет создать атмосферу, которая сразу возникает при прослушивании треков."
-		},
-		{
-			"name":"ГРОБ",
-			"photo":"img/GuVUT8XBArw_d_850.jpg",
-			"subs":10000,
-			"description":"«Гражданская оборона» — советская и российская рок-группа, основанная 8 ноября 1984 года в Омске Егором Летовым и Константином Рябиновым, наиболее заметная представительница сибирского панк-рока."
-		},
-		{
-			"name":"Horus",
-			"photo":"img/unnamed.jpg",
-			"subs": 1300,
-			"description":"Денис Луперкаль — один из участников группы Проект Увечье. (прим. Нередко вместе с названием группы приписывают числа 16 13, которые обозначают 16 и 13 буквы латинского алфавита p и m — Project mayhem."
-		}
-	]`;
 	const swiper = document.getElementById('swiper');
 	swiper.style.width = `${document.documentElement.clientWidth}px`;
 	swiper.style.height = `${document.documentElement.clientHeight}px`;
 
-	//Класс контента карточек
-	class Content{
-		constructor(name, photo, subs, info) {
-			this.name = name;
-			this.photo = photo;
-			this.subs = subs;
-			this.info  = info;
+	getNextContent = controlContent([]);
+	//Классы для обработки ошибок, связанных с сервером
+	class NoDataError extends Error {
+		constructor(message) {
+			super(message);
+			this.name = this.constructor.name;
+		}
+	}
+	class NoServerConnectionError extends Error {
+		constructor(message) {
+			super(message);
+			this.name = this.constructor.name;
 		}
 	}
 
-	//Класс преобразования карточек в различные форматы
-	class ContentConvertion{
-		constructor(content) {
-			this.content = content;
-		}
-		intoJSON() {
-			return JSON.stringify(this.content, null, 3);
-		}
-	}
 
-	//Генерация пробного контента
-	function generateArrayOfContent() {
-		const arrayOfContent = [];
-		for(let item of JSON.parse(contentJSON)) {
-			arrayOfContent.push(new Content(item.name, item.photo, item.subs, item.description));
-		}
-		return arrayOfContent;
-	}
+	//Объект для работы с элементами(в HTML) свайпера
+	const workWithBlocks = {
 
-	let getNextContent = controlContent(generateArrayOfContent());
-	buildTheFrontBlock(getNextContent());
-	buildTheNextBlock(getNextContent());
-
-
-
-
-
-	function createOneBlock(content) {
-		const block = document.createElement('div');
-		block.className = 'swiper_item';
-		block.innerHTML = 
-		`
-			<div class="block">
-				<div class="wrapper">
-					<div class="name">
-						${content.name}
-					</div>
-					<img data-src = ${content.photo} alt = "">
-					<div class="subs">
-						Подписчиков: <span>${content.subs}</span>
-					</div>
-					<div class="description">
-						Описание: <span>${content.info}</span>
+		createBlockWithContent: function(content) {
+			const block = document.createElement('div');
+			block.className = 'swiper_item';
+			block.innerHTML = 
+			`
+				<div class="block">
+					<div class="wrapper">
+						<div class="name">
+							${content.name}
+						</div>
+						 <!-- <img data-src = ${content.photo} alt = ""> -->
+						<div class="subs">
+							Подписчиков: <span>${content.username}</span>
+						</div>
+						<div class="description">
+							Описание: <span>${content.email}</span>
+						</div>
 					</div>
 				</div>
-			</div>
-		`;
-		giveShapeOfSwiperFrameToBlock(block);
-		lazyLoad(block.querySelector('img'));
-		return block;
-	}
+			`;
+			giveShapeOfSwiperFrameToBlock(block);
+			//lazyLoad(block.querySelector('img'));
+			return block;
 
-	//Функция постепенной прогрузки изображений
-	function lazyLoad(img) {
-		img.setAttribute('src', img.getAttribute('data-src'));
-		img.onload = function() {
-			img.removeAttribute('data-src');
+			//Функция постепенной прогрузки изображений
+			function lazyLoad(img) {
+				img.setAttribute('src', img.getAttribute('data-src'));
+				img.onload = function() {
+					img.removeAttribute('data-src');
+				}
+			}
+
+			//Задание размеров создаваемому блоку
+			function giveShapeOfSwiperFrameToBlock(block) {
+				block.style.width = `${swiper.clientWidth}px`;
+				block.style.height = `${swiper.clientHeight}px`;
+			}
+		},
+
+		createLoadBlock: function() {
+			const block = document.createElement('div');
+			block.className = 'loading_page';
+			block.innerHTML = 
+			`
+				<div class="lds-roller"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+			`;
+			block.style.width = `${swiper.clientWidth}px`;
+			block.style.height = `${swiper.clientHeight}px`;
+			return block;
+		},
+
+		createErrorServerBlock: function() {
+			const block = document.createElement('div');
+			block.className = 'block_error';
+			block.innerHTML = 
+			`
+				<div class = wrapper_error>
+					<p>Больше ничего не найдено</p>
+					<button id = 'recall'><span class="icon-spinner11"></span></button>
+				</div>
+
+			`;
+			block.style.width = `${swiper.clientWidth}px`;
+			block.style.height = `${swiper.clientHeight}px`;
+			return block;
+		},
+
+		createBlockWithoutContent: function() {
+			const block = document.createElement('div');
+			block.className = 'block_nothing';
+			block.innerHTML = 
+			`
+				<div class = wrapper_nothing>
+					<p>Больше нет результатов</p>
+				</div>
+
+			`;
+			block.style.width = `${swiper.clientWidth}px`;
+			block.style.height = `${swiper.clientHeight}px`;
+			return block;
+		},
+		
+		createFormBlock: function() {
+			const block = document.createElement('div');
+			block.className = 'form_input';
+			block.innerHTML = 
+			`
+				<form id = "account" name = "account">
+					<h2>Войдите в свой аккаунт</h2>
+					<input type="text" placeholder = "Логин" id = "login" name = "login"/>
+					<input type="text" placeholder = "Пароль" id = "pass" name = "pass"/>
+					<input type="button" value = "Войти" id = "enter_to_acc" name = "enter_acc"/>
+				</form>
+
+			`;
+			block.style.width = `${swiper.clientWidth}px`;
+			block.style.height = `${swiper.clientHeight}px`;
+			return block;
+		},
+
+
+		//Инициализация впередистоящего элемента и добавление
+		//(используется при прогрузке следующего массива, чтобы построить первый элемент)
+		buildTheFrontBlock: function(content) {
+			if(content) {
+				const buildedBlock = this.createBlockWithContent(content);
+				buildedBlock.classList.add('front');
+				swiper.append(buildedBlock);		
+				buildedBlock.addEventListener('touchstart', eventSwipe);
+			}
+		},
+
+		//Построение следующего блока. Идет постепенная подгрузка следующего контента
+		buildTheNextBlock: function(content) {
+			if(content) {
+				const buildedBlock = this.createBlockWithContent(content);
+				buildedBlock.classList.add('next');
+				swiper.append(buildedBlock);		
+			}
+		},
+
+		//Удаление старого начального блока, его замена с next, построение нового next
+		rebuildBlocks: function(content) {
+			const deletedElement = document.querySelector('.front');
+			deletedElement.removeEventListener('touchstart', eventSwipe);
+
+			//Ожидание улета пролистанного блока за границы экрана, последующее перестроение
+			setTimeout(() => {
+				deletedElement.remove();
+				deletedElement.classList.remove('front');
+
+				const nextElement = document.querySelector('.next');
+				if(nextElement) {
+					nextElement.classList.add('front');
+					nextElement.classList.remove('next');
+					nextElement.addEventListener('touchstart', eventSwipe);
+				} else {
+					document.getElementById('mix').style.zIndex = '0';
+				}
+
+				this.buildTheNextBlock(content); 
+			}, 300);
 		}
 	}
 
-	function giveShapeOfSwiperFrameToBlock(block) {
-		block.style.width = `${swiper.clientWidth}px`;
-		block.style.height = `${swiper.clientHeight}px`;
-	}
+
+
+	swiper.append(workWithBlocks.createLoadBlock());
+	swiper.append(workWithBlocks.createErrorServerBlock());
+	swiper.append(workWithBlocks.createBlockWithoutContent());
+	swiper.append(workWithBlocks.createFormBlock());
+
+
 
 	//Функция для хранения характеристик массива и для его псевдоинкапуляции. Забирается контент ИЗ КОНЦА
 	//для увеличения скорости на стороне клиента (предполагается изначальная сортировка на стороне сервера)
@@ -169,50 +235,68 @@ function main() {
 		return getContent;
 	}
 
-	//Инициализация класса впередистоящего элемента и добавление
-	//(используется при прогрузке следующего массива, чтобы построить первый элемент)
-	function buildTheFrontBlock(content) {
-		if(content) {
-			const buildedBlock = createOneBlock(content);
-			buildedBlock.classList.add('front');
-			swiper.append(buildedBlock);		
-			buildedBlock.addEventListener('touchstart', eventSwipe);
-		}
+	//Подзагрузка нового контента с сервера
+	function loadContentFromServer(url, concat = true) {
+
+		//Возвращение в стандартное состояние перед загрузкой
+		state.isLoading = true;
+		state.contentAvailable = true;
+		document.querySelector('.block_nothing').style.zIndex = '20';
+		document.querySelector('.block_error').style.zIndex = '10';
+		controlMixBut();
+
+		fetch(url)
+			.then(response => {
+				if(response.ok)
+					return response.json();
+				else
+					throw new NoServerConnectionError('No server connection');
+			})
+			.then(json => {
+				//Если получен пустой массив => больше данных нет, необходимо вывести блок с информацией об этом
+				if(json.length === 0) 
+					throw new NoDataError('No data');
+				//Добавление новых данных к уже существующим
+				if(concat)
+					getNextContent = controlContent(json.concat(getNextContent.allContent));
+				else
+					getNextContent = controlContent(json);
+
+				//Проверка на отрисованность элементов свайпера при загрузке
+				//В случае отсутствия какого-либо блока они прорисовываются
+				if(!document.querySelector('.front')) {
+					console.log('front');
+					workWithBlocks.buildTheFrontBlock(getNextContent());
+				}			
+				if(!document.querySelector('.next')) {
+					console.log('next');
+					workWithBlocks.buildTheNextBlock(getNextContent());
+				}
+			})
+			.catch((e) => {
+				state.contentAvailable = false;
+				if(e.name === 'NoServerConnectionError')
+					document.querySelector('.block_error').style.zIndex = '40';
+				else if(e.name === 'NoDataError')
+					document.querySelector('.block_nothing').style.zIndex = '40';
+				else 
+					throw e;
+			})
+			.finally(() => {
+				state.isLoading = false;
+				controlMixBut();
+			});
 	}
 
-	//Построение следующего блока. Идет постепенная подгрузка следующего контента
-	function buildTheNextBlock(content) {
-		if(content) {
-			const buildedBlock = createOneBlock(content);
-			buildedBlock.classList.add('next');
-			swiper.append(buildedBlock);		
-		}
-	}
-
-	//Удаление старого начального блока, его замена с next, построение нового next
-	function rebuildBlocks(content) {
-		if(content) {
-			const deletedElement = document.querySelector('.front');
-			deletedElement.removeEventListener('touchstart', eventSwipe);
-
-			//Ожидание улета пролистанного блока за границы экрана, последующее перестроение
-			setTimeout(() => {
-				deletedElement.remove();
-				deletedElement.classList.remove('front');
-
-				const nextElement = document.querySelector('.next');
-				nextElement.classList.add('front');
-				nextElement.classList.remove('next');
-				nextElement.addEventListener('touchstart', eventSwipe);
-
-				buildTheNextBlock(content); 
-			}, 400);
-		}
+	function controlMixBut() {
+		if(document.querySelector('.front'))
+			document.getElementById('mix').style.zIndex = '130';
+		else
+			document.getElementById('mix').style.zIndex = '0';
 	}
 
 	//callback, передаваемый слушателю события пролистывания свайпера
 	function eventSwipe(event) {
-
 		const targetOfEvent = event.target.closest('.front');
 
 		targetOfEvent.style.transition = 'none';
@@ -226,8 +310,8 @@ function main() {
 		const startYClient = event.changedTouches[0].clientY;
 
 		//Определение, где был совершен клик, чтобы двигать элемент в той же его точке
-		const biasX = startXClient - swiper.getBoundingClientRect().left;
-		const biasY = startYClient - swiper.getBoundingClientRect().top;
+		const biasX = event.changedTouches[0].clientX - swiper.getBoundingClientRect().left;
+		const biasY = event.changedTouches[0].clientY - swiper.getBoundingClientRect().top;
 
 		//Если курсор выше половины высоты => поворот против часовой (и наоборот)
 		const sign = startYClient >= swiper.getBoundingClientRect().top + swiper.offsetHeight/2 ? 1 : -1;
@@ -254,16 +338,15 @@ function main() {
 
 		swiper.addEventListener('touchend', resultOfSwipe);
 
-		//Если касание ушло со слайдера, то считается, что пользователь отпустил касание и совершаем аналогичное
-		//поднятию пальца действие	
-		//swiper.addEventListener('touchcancel', resultOfSwipe);
-
+		//Если курсор ушел со слайдера, то считается, что пользователь отпустил мышь и совершаем аналогичное
+		//поднятию курсора действие
+		swiper.addEventListener('touchcancel', resultOfSwipe);
 
 		//Функция обработки результата свайпа
 		function resultOfSwipe(event) {
 
 			//Пролистывание блока, если произошло смещение на определенный порог, иначе возращение в исходное состояние
-			if(Math.abs(event.changedTouches[0].clientX - startXClient) >= swiper.offsetWidth*0.4){
+			if(Math.abs(event.changedTouches[0].clientX - startXClient) >= 100){
 
 				//Определение в какую сторону должен улететь блок
 				const scroll = event.changedTouches[0].clientX - startXClient <= 0 ? -swiper.offsetWidth*2 : swiper.offsetWidth*3;
@@ -272,19 +355,20 @@ function main() {
 				targetOfEvent.style.transition = '0.4s';
 				targetOfEvent.style.left = `${scroll}px`;
 
-				changeBlocks(event);
+				changeBlocks();
 			}
-			else
-				bringToStart();
+			else {
+				bringItemToStart();
+			}
 
 			//Чистка событий
 			swiper.removeEventListener('touchmove', mouseMove);
 			swiper.removeEventListener('touchend', resultOfSwipe);
-			//swiper.removeEventListener('touchcancel', resultOfSwipe);
+			swiper.removeEventListener('touchcancel', resultOfSwipe);
 		}
 
 		//Плавное возвращение элемента в исходное состояние (если свайп не произошел)
-		function bringToStart() {
+		function bringItemToStart() {
 			targetOfEvent.style.transition = '0.6s';
 			targetOfEvent.style.transform = 'none';
 			targetOfEvent.style.left = '0';
@@ -292,11 +376,36 @@ function main() {
 		}
 
 		//Подгрузка новых блоков при смене элемента
-		function changeBlocks(event) {
-			if(getNextContent.balanceOfContent <= 3){
-				getNextContent = controlContent(generateArrayOfContent().concat(getNextContent.allContent));
+		function changeBlocks() {
+			if(getNextContent.balanceOfContent <= 3 && !state.isLoading && state.contentAvailable){
+				//loadContentFromServer(`https://jsonplaceholder.typicode.com/users?isRandom=${state.isRandom}&maxCountOFSubs=${state.maxCountOFSubs}`);
+				loadContentFromServer('https://jsonplaceholder.typicode.com/users1');
 			}
-			rebuildBlocks(getNextContent());	
+			workWithBlocks.rebuildBlocks(getNextContent());
+			controlMixBut();
 		}
 	}
+
+	document.getElementById('recall').addEventListener('touchstart', (event) => {
+		event.preventDefault();
+		//loadContentFromServer(`https://jsonplaceholder.typicode.com/users?isRandom=${state.isRandom}&maxCountOFSubs=${state.maxCountOFSubs}`);
+		loadContentFromServer('https://jsonplaceholder.typicode.com/users');
+	});
+
+	document.getElementById('enter_to_acc').addEventListener('touchstart', () => {
+		event.preventDefault();
+		let formAcc = document.forms.account;
+		//loadContentFromServer(`https://jsonplaceholder.typicode.com/users?login=${formAcc.login.value}&pass=${formAcc.pass.value}&isRandom=${state.isRandom}&maxCountOFSubs=${state.maxCountOFSubs}`);
+		loadContentFromServer(`https://jsonplaceholder.typicode.com/users`);
+		document.querySelector('.form_input').style.zIndex = '0';
+	});
+
+
+	document.getElementById('mix').addEventListener('touchstart', (event) => {
+		event.preventDefault();
+		document.getElementById('mix').classList.toggle('not_mixed');
+		state.isRandom = !state.isRandom;
+		//loadContentFromServer(`https://jsonplaceholder.typicode.com/users?&isRandom=${state.isRandom}&maxCountOFSubs=${state.maxCountOFSubs}`, false);
+		loadContentFromServer(`https://jsonplaceholder.typicode.com/users`, false);
+	});
 }
